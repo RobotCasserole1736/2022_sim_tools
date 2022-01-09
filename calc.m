@@ -23,7 +23,7 @@ function update_plot (obj, init = false)
   %Nominal Iteration Parameters 
   launch_x_ft_nom = 1.0 + get(h.launch_x_dist_slider, "value") * 30.0;  %Distance between launch point and goal.  
   launch_z_ft_nom = 0.5 + get(h.launch_height_slider, "value") * 5.0; %Launch point of the ball height off the ground in ft. Max is 0.69m
-  launch_angle_deg_nom = 45 + get(h.launch_angle_slider, "value") * 45; %angle between floor and launch point
+  launch_angle_deg_nom = 20 + get(h.launch_angle_slider, "value") * 70; %angle between floor and launch point
   launch_speed_mps_nom = 5.0 + get(h.launch_speed_slider, "value") * 20.0; % Launch speed in meters per seconds
   ball_collision_eff = sqrt(2.5)/sqrt(3.0); % From the game manual - a ball dropped from 3 ft bouncs back up to 2.5 ft = sqrt(2.5)/sqrt(3.0) = .91 efficency
   
@@ -120,13 +120,17 @@ function update_plot (obj, init = false)
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %% Solution Iteration
   
-  totalRuns = 0;
+  totalRuns = length(launch_speeds) * length(launch_angles) * length(launch_dists) * length(launch_heights);
   successRuns = 0;
+  curRun = 0;
 
   for launch_speed_mps = launch_speeds
     for launch_angle_deg = launch_angles
       for launch_x_ft = launch_dists
         for launch_z_ft = launch_heights
+          curRun += 1;
+          set (h.results_label, "string", sprintf ("Recalculating Scenario %.1f of %.1f", curRun,totalRuns));
+
 
           i = 1; %simulation step
           
@@ -215,7 +219,6 @@ function update_plot (obj, init = false)
           %draw ball
           %rectangle('Position', [pos_x(i)-ball_rad_m,pos_z(i)-ball_rad_m,2*ball_rad_m,2*ball_rad_m], 'FaceColor', [0.5, 0.5, 0.5], 'Curvature', [1, 1]);
 
-          totalRuns += 1;
           if(failed == 1)
             color = 'red';
           else
