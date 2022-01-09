@@ -21,11 +21,11 @@ function update_plot (obj, init = false)
   h = guidata (obj);
 
   %Nominal Iteration Parameters 
-  launch_x_ft = 1.0 + get(h.launch_x_dist_slider, "value") * 30.0;  %Distance between launch point and goal.  
-  launch_z_ft = 0.5; %Launch point of the ball height off the ground in ft. Max is 0.69m
+  launch_x_ft_nom = 1.0 + get(h.launch_x_dist_slider, "value") * 30.0;  %Distance between launch point and goal.  
+  launch_z_ft_nom = 0.5 + get(h.launch_height_slider, "value") * 5.0; %Launch point of the ball height off the ground in ft. Max is 0.69m
   launch_angle_deg_nom = 45 + get(h.launch_angle_slider, "value") * 45; %angle between floor and launch point
   launch_speed_mps_nom = 5.0 + get(h.launch_speed_slider, "value") * 20.0; % Launch speed in meters per seconds
-  ball_collision_eff = get(h.bounce_coef_slider, "value") * 1.0; % From the game manual - a ball dropped from 3 ft bouncs back up to 2.5 ft = sqrt(2.5)/sqrt(3.0) = .91 efficency
+  ball_collision_eff = sqrt(2.5)/sqrt(3.0); % From the game manual - a ball dropped from 3 ft bouncs back up to 2.5 ft = sqrt(2.5)/sqrt(3.0) = .91 efficency
   
   % Parameter Spread
   launch_speed_mps_spread = get(h.launch_speed_spread_slider, "value") * 5.0;
@@ -36,12 +36,34 @@ function update_plot (obj, init = false)
   endif
   
   launch_angle_spread = get(h.launch_angle_spread_slider, "value") * 20.0;
-  if(launch_speed_mps_spread != 0)
+  if(launch_angle_spread != 0)
     launch_angles = linspace(-1.0, 1.0, 5) .* launch_angle_spread .+ launch_angle_deg_nom;
   else
     launch_angles = [launch_angle_deg_nom];
   endif
   
+  launch_x_dist_spread = get(h.launch_x_dist_spread_slider, "value") * 4.0;
+  if(launch_x_dist_spread != 0)
+    launch_dists = linspace(-1.0, 1.0, 5) .* launch_x_dist_spread .+ launch_x_ft_nom;
+  else
+    launch_dists = [launch_x_ft_nom];
+  endif
+  
+  launch_height_spread = get(h.launch_height_spread_slider, "value") * 0.5;
+  if(launch_height_spread != 0)
+    launch_heights = linspace(-1.0, 1.0, 5) .* launch_height_spread .+ launch_z_ft_nom;
+  else
+    launch_heights = [launch_z_ft_nom];
+  endif  
+  
+
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %% Update GUI Labels
+  set (h.launch_speed_label, "string", sprintf ("Speed:  %.1f +/- %.1f  m/s", launch_speed_mps_nom, launch_speed_mps_spread));
+  set (h.launch_angle_label, "string", sprintf ("Angle:  %.1f +/- %.1f  deg", launch_angle_deg_nom, launch_angle_spread));
+  set (h.launch_x_dist_label, "string", sprintf("Dist:   %.1f +/- %.1f  ft", launch_x_ft_nom, launch_x_dist_spread));
+  set (h.launch_height_label, "string", sprintf("Height: %.1f +/- %.1f  ft:", launch_z_ft_nom, launch_height_spread));
+
   
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %% Simulation constants - should probably stay as is.
@@ -62,22 +84,13 @@ function update_plot (obj, init = false)
   %% Derived constants and sim vectors
   frontal_area_m2 = 0.5 * (4*pi*(0.5*ball_diameter_m)^2); %Half the total surface area is the frontal area
   Vt_mps = sqrt((2*m_ball_kg*g_mps)/(cD*density_air_kgpm3*frontal_area_m2)); %Terminal velocity in meters per second
-  launch_x_m = 0.3048*launch_x_ft;
-  launch_z_m = 0.3048*launch_z_ft;
 
-  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  %% Update GUI Labels
-  set (h.launch_speed_label, "string", sprintf ("Speed: %.1f +/- %.1f m/s", launch_speed_mps_nom, launch_speed_mps_spread));
-  set (h.launch_angle_label, "string", sprintf ("Angle: %.1f +/- %.1f  deg", launch_angle_deg_nom, launch_angle_spread));
-  set (h.launch_x_dist_label, "string", sprintf ("Dist: %.1f ft", launch_x_ft));
-  set (h.bounce_coef_label, "string", sprintf ("BounceCoef: %.1f", ball_collision_eff));
 
-  
   % Goal and inner wall points and vectors
-  top_goal_x_close = launch_x_m;
+  top_goal_x_close = 0.0;
   top_goal_x_far = top_goal_x_close + goal_top_diameter_m;
   top_goal_z = goal_top_height_m;
-  bottom_goal_x_close = launch_x_m + (goal_top_diameter_m - goal_bottom_diameter_m)/2;
+  bottom_goal_x_close = top_goal_x_close + (goal_top_diameter_m - goal_bottom_diameter_m)/2;
   bottom_goal_x_far = bottom_goal_x_close + goal_bottom_diameter_m;
   bottom_goal_z = goal_bottom_height_m; 
   vert_top_far = [top_goal_x_far, top_goal_z, 0];
@@ -98,7 +111,7 @@ function update_plot (obj, init = false)
   hold on;
 
   %draw floor and goal
-  rectangle(h.ax, 'Position', [0,-0.05,launch_x_m,0.05], 'FaceColor', [0,0,0]);
+  rectangle(h.ax, 'Position', [-1.0*0.3048*launch_x_ft_nom,-0.05,0,0.05], 'FaceColor', [0,0,0]);
   rectangle(h.ax, 'Position', [top_goal_x_close,top_goal_z,goal_top_diameter_m,0.05], 'FaceColor', [1,0,0]);
   rectangle(h.ax, 'Position', [bottom_goal_x_close,bottom_goal_z,goal_bottom_diameter_m,-0.05], 'FaceColor', [1,0,0]);
   plot(h.ax, [top_goal_x_close, bottom_goal_x_close] , [top_goal_z,bottom_goal_z]);
@@ -106,96 +119,119 @@ function update_plot (obj, init = false)
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   %% Solution Iteration
+  
+  totalRuns = 0;
+  successRuns = 0;
 
   for launch_speed_mps = launch_speeds
     for launch_angle_deg = launch_angles
+      for launch_x_ft = launch_dists
+        for launch_z_ft = launch_heights
 
-      i = 1; %simulation step
-      
-      % Per-iteration constant recalcs
-      launch_angle_rad = pi/180*launch_angle_deg;
-
-
-      %See http://farside.ph.utexas.edu/teaching/336k/Newtonhtml/node29.html for some 
-      %references on trajectory calculation
-
-      %Initial conditions
-      time(i) = i*Ts;
-      pos_x(i) = 0;
-      pos_z(i) = launch_z_m;
-      vel_x(i) = launch_speed_mps*cos(launch_angle_rad);
-      vel_z(i) = launch_speed_mps*sin(launch_angle_rad);
-
-      failed = 0;
-
-      %calculate trajectory until terminal case (ball hits floor or ball hits goal)
-      while(1)
-
-        % Evaluate bounce conditions
-        if(and(pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
-          velVec = [vel_x(i), vel_z(i), 0];
-          posVec = [pos_x(i), pos_z(i), 0];
-          distFar = distPointToLine(posVec, vert_top_far, vert_bottom_far);
-          if(distFar <= ball_rad_m)
-            velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
-            velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
-            velPerpWall *= -1 * ball_collision_eff;
-            vel_x(i) = velAlongWall(1) + velPerpWall(1);
-            vel_z(i) = velAlongWall(2) + velPerpWall(2);
-          endif
+          i = 1; %simulation step
           
-          distClose = distPointToLine(posVec, vert_top_close, vert_bottom_close);
-          if(distClose <= ball_rad_m)
-            velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
-            velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
-            velPerpWall *= -1 * ball_collision_eff;
-            vel_x(i) = velAlongWall(1) + velPerpWall(1);
-            vel_z(i) = velAlongWall(2) + velPerpWall(2);
-          endif
-        endif
+          % Per-iteration constant recalcs
+          launch_angle_rad = pi/180*launch_angle_deg;
+          launch_x_m = 0.3048*launch_x_ft;
+          launch_z_m = 0.3048*launch_z_ft;
+          
+          % Clear old data from arrays
+          time = zeros(1, 10);
+          pos_x = zeros(1, 10);
+          pos_z = zeros(1, 10);
+          vel_x = zeros(1, 10);
+          vel_z = zeros(1, 10);
 
-        % Step simulation forward
-        i = i + 1;
-        time(i) = i*Ts;
-        vel_x(i) = vel_x(i-1)/(1+Ts*g_mps/Vt_mps);
-        vel_z(i) = (-Ts*g_mps + vel_z(i-1))/(1+Ts*g_mps/Vt_mps);
-        pos_x(i) = pos_x(i-1) + vel_x(i)*Ts;
-        pos_z(i) = pos_z(i-1) + vel_z(i)*Ts;
-        
-        % Check end conditions
-        if(and(pos_z(i) < bottom_goal_z + ball_rad_m, vel_z(i) < 0))
-          if(or(pos_x(i) < bottom_goal_x_close, pos_x(i) > bottom_goal_x_far))
-            failed = 1;
+          %See http://farside.ph.utexas.edu/teaching/336k/Newtonhtml/node29.html for some 
+          %references on trajectory calculation
+
+          %Initial conditions
+          time(i) = i*Ts;
+          pos_x(i) = -1.0*launch_x_m;
+          pos_z(i) = launch_z_m;
+          vel_x(i) = launch_speed_mps*cos(launch_angle_rad);
+          vel_z(i) = launch_speed_mps*sin(launch_angle_rad);
+
+          failed = 0;
+
+          %calculate trajectory until terminal case (ball hits floor or ball hits goal)
+          while(1)
+
+            % Evaluate bounce conditions
+            if(and(pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
+              velVec = [vel_x(i), vel_z(i), 0];
+              posVec = [pos_x(i), pos_z(i), 0];
+              distFar = distPointToLine(posVec, vert_top_far, vert_bottom_far);
+              if(distFar <= ball_rad_m)
+                velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
+                velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
+                velPerpWall *= -1 * ball_collision_eff;
+                vel_x(i) = velAlongWall(1) + velPerpWall(1);
+                vel_z(i) = velAlongWall(2) + velPerpWall(2);
+              endif
+              
+              distClose = distPointToLine(posVec, vert_top_close, vert_bottom_close);
+              if(distClose <= ball_rad_m)
+                velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
+                velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
+                velPerpWall *= -1 * ball_collision_eff;
+                vel_x(i) = velAlongWall(1) + velPerpWall(1);
+                vel_z(i) = velAlongWall(2) + velPerpWall(2);
+              endif
+            endif
+
+            % Step simulation forward
+            i = i + 1;
+            time(i) = i*Ts;
+            vel_x(i) = vel_x(i-1)/(1+Ts*g_mps/Vt_mps);
+            vel_z(i) = (-Ts*g_mps + vel_z(i-1))/(1+Ts*g_mps/Vt_mps);
+            pos_x(i) = pos_x(i-1) + vel_x(i)*Ts;
+            pos_z(i) = pos_z(i-1) + vel_z(i)*Ts;
+            
+            % Check end conditions
+            if(and(pos_x(i) > bottom_goal_x_close, pos_z(i) < bottom_goal_z))
+              % Too low, hit below the upper HUB
+              failed = 1;
+              break; 
+            elseif(and(pos_x(i) > top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
+              % Too far, overshot
+              failed = 1;
+              break; 
+            elseif(and(pos_z(i) < bottom_goal_z + ball_rad_m*0.5, vel_z(i) < 0))
+              if(or(pos_x(i) < bottom_goal_x_close, pos_x(i) > bottom_goal_x_far))
+                  % Fell outside target plane inside the upper HUB
+                failed = 1;
+              else
+                  % In the required plane, we're good!
+                failed = 0;
+              endif
+              break;              
+            endif 
+
+          endwhile
+          
+
+
+          %draw ball
+          %rectangle('Position', [pos_x(i)-ball_rad_m,pos_z(i)-ball_rad_m,2*ball_rad_m,2*ball_rad_m], 'FaceColor', [0.5, 0.5, 0.5], 'Curvature', [1, 1]);
+
+          totalRuns += 1;
+          if(failed == 1)
+            color = 'red';
           else
-            failed = 0;
+            color = 'green';
+            successRuns += 1;
           endif
-          break;
-        elseif(and(pos_x(i) > bottom_goal_x_close, pos_z(i) < bottom_goal_z))
-          failed = 1;
-          break;   
           
-        elseif(and(pos_x(i) > top_goal_x_far + ball_rad_m, pos_z(i) < top_goal_z + ball_rad_m))
-          failed = 1;
-          break; 
-        endif
-        
-      endwhile
+          %Plot trajectory
+          plot(h.ax, pos_x, pos_z, "color", color);
       
-
-
-      %draw ball
-      %rectangle('Position', [pos_x(i)-ball_rad_m,pos_z(i)-ball_rad_m,2*ball_rad_m,2*ball_rad_m], 'FaceColor', [0.5, 0.5, 0.5], 'Curvature', [1, 1]);
-
-      %Plot trajectory
-      if(failed == 1)
-        color = 'red';
-      else
-        color = 'green';
-      endif
-      plot(h.ax, pos_x, pos_z, "color", color);
-      
+        endfor
+      endfor
     endfor
   endfor  
+
+  set (h.results_label, "string", sprintf ("Goals Made: %.1f%%", 100.0*successRuns/totalRuns));
 
 
   axis(h.ax, "equal");
@@ -262,25 +298,31 @@ h.launch_angle_spread_slider = uicontrol ("style", "slider",
                             "value", 0.0,
                             "position", [0.66 0.25 0.3 0.04]);   
            
-h.bounce_coef_label = uicontrol ("style", "text",
+h.launch_height_label = uicontrol ("style", "text",
                            "units", "normalized",
                            "string", "",
                            "horizontalalignment", "left",
                            "position", [0.00 0.35 0.3 0.07]);
            
-h.bounce_coef_slider = uicontrol ("style", "slider",
+h.launch_height_slider = uicontrol ("style", "slider",
                             "units", "normalized",
                             "string", "slider",
                             "callback", @update_plot,
                             "value", 0.75,
                             "position", [0.33 0.35 0.3 0.04]);
                             
-h.bounce_coef_spread_slider = uicontrol ("style", "slider",
+h.launch_height_spread_slider = uicontrol ("style", "slider",
                             "units", "normalized",
                             "string", "slider",
                             "callback", @update_plot,
                             "value", 0.0,
                             "position", [0.66 0.35 0.3 0.04]);  
+                            
+h.results_label = uicontrol ("style", "text",
+                           "units", "normalized",
+                           "string", "",
+                           "horizontalalignment", "left",
+                           "position", [0.04 0.90 0.3 0.06]);                            
   
 set (gcf, "color", get(0, "defaultuicontrolbackgroundcolor"))
 guidata (gcf, h)
