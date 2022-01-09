@@ -6,75 +6,282 @@
 
 clear;
 
-%% Testcase constants - adjust to suit your needs (dependent on robot state at launch time)
-launch_x_ft = 82.0/12.0;  %Distance between launch point and goal.  
-launch_wheel_speed_RPM = 3400; %RPM speed of launch wheel (assumes single-wheel launcher)
+graphics_toolkit qt
 
-%Your system parameters (dependent on robot design)
-launch_z_ft = 0.5; %Launch point of the ball height off the ground in meters. Max is 0.69m
-launch_angle_deg = 75; %angle between floor and launch point
-launch_speed_mps = 12.0; % Launch speed in meters per seconds
+close all
+clear h
 
+graphics_toolkit qt
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Simulation constants - should probably stay as is.
-Ts = 0.01; %10ms sample rate for solver (10ms intervals)
-goal_height_m = 2.64; %Height of the top rim of the high goal - 8ft 1 in
-goal_diameter_m = 1.3208; %Diameter of the top rim of the goal - 4 ft 4 in
-ball_diameter_m = 0.2286; % 9in ball 
-ball_rad_m = ball_diameter_m/2;
-g_mps = 9.81; %Gravitational constant
-density_air_kgpm3 = 1.225; %desnity of air per https://en.wikipedia.org/wiki/Density_of_air
-m_ball_kg = 0.270; %Total guess at the weight of the "fuel" in kg.
-cD = 0.507; %Drag coefficent for tennis ball per https://twu.tennis-warehouse.com/learning_center/aerodynamics2.php
-%cD = 0; %Zero drag = no air resistance = you can't breathe
+h.ax = axes ("position", [0.05 0.42 0.9 0.5]);
 
 
-%% Derived constants
-frontal_area_m2 = 0.5 * (4*pi*(0.5*ball_diameter_m)^2); %Half the total surface area is the frontal area
-Vt_mps = sqrt((2*m_ball_kg*g_mps)/(cD*density_air_kgpm3*frontal_area_m2)); %Terminal velocity in meters per second
-launch_angle_rad = pi/180*launch_angle_deg;
-launch_x_m = 0.3048*launch_x_ft;
-launch_z_m = 0.3048*launch_z_ft;
+function update_plot (obj, init = false)
+  
+  h = guidata (obj);
 
-i = 1; %simulation step
+  %Nominal Iteration Parameters 
+  launch_x_ft = 1.0 + get(h.launch_x_dist_slider, "value") * 30.0;  %Distance between launch point and goal.  
+  launch_z_ft = 0.5; %Launch point of the ball height off the ground in ft. Max is 0.69m
+  launch_angle_deg_nom = 45 + get(h.launch_angle_slider, "value") * 45; %angle between floor and launch point
+  launch_speed_mps_nom = 5.0 + get(h.launch_speed_slider, "value") * 20.0; % Launch speed in meters per seconds
+  ball_collision_eff = get(h.bounce_coef_slider, "value") * 1.0; % From the game manual - a ball dropped from 3 ft bouncs back up to 2.5 ft = sqrt(2.5)/sqrt(3.0) = .91 efficency
+  
+  % Parameter Spread
+  launch_speed_mps_spread = get(h.launch_speed_spread_slider, "value") * 5.0;
+  if(launch_speed_mps_spread != 0)
+    launch_speeds = linspace(-1.0, 1.0, 5) .* launch_speed_mps_spread .+ launch_speed_mps_nom;
+  else
+    launch_speeds = [launch_speed_mps_nom];
+  endif
+  
+  launch_angle_spread = get(h.launch_angle_spread_slider, "value") * 20.0;
+  if(launch_speed_mps_spread != 0)
+    launch_angles = linspace(-1.0, 1.0, 5) .* launch_angle_spread .+ launch_angle_deg_nom;
+  else
+    launch_angles = [launch_angle_deg_nom];
+  endif
+  
+  
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %% Simulation constants - should probably stay as is.
+  Ts = 0.01; %10ms sample rate for solver (10ms intervals)
+  goal_top_height_m = 2.64; %Height of the top rim of the high goal - 8ft 1 in
+  goal_top_diameter_m = 1.3208; %Diameter of the top rim of the goal - 4 ft 4 in
+  goal_bottom_height_m = goal_top_height_m - 0.5760; % Height of the bottom rim of the goal above ground - about 1.9 ft below top.
+  goal_bottom_diameter_m = 0.67; %Diameter of the bottom rim of the goal about 2.2 ft or so from cad
+  ball_diameter_m = 0.2286; % 9in ball 
+  ball_rad_m = ball_diameter_m/2;
+  g_mps = 9.81; %Gravitational constant
+  density_air_kgpm3 = 1.225; %desnity of air per https://en.wikipedia.org/wiki/Density_of_air
+  m_ball_kg = 0.270; %Total guess at the weight of the "fuel" in kg.
+  cD = 0.507; %Drag coefficent for tennis ball per https://twu.tennis-warehouse.com/learning_center/aerodynamics2.php
+  
 
-%See http://farside.ph.utexas.edu/teaching/336k/Newtonhtml/node29.html for some 
-%references on trajectory calculation
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %% Derived constants and sim vectors
+  frontal_area_m2 = 0.5 * (4*pi*(0.5*ball_diameter_m)^2); %Half the total surface area is the frontal area
+  Vt_mps = sqrt((2*m_ball_kg*g_mps)/(cD*density_air_kgpm3*frontal_area_m2)); %Terminal velocity in meters per second
+  launch_x_m = 0.3048*launch_x_ft;
+  launch_z_m = 0.3048*launch_z_ft;
 
-%Initial conditions
-time(i) = i*Ts;
-pos_x(i) = 0;
-pos_z(i) = launch_z_m;
-vel_x(i) = launch_speed_mps*cos(launch_angle_rad);
-vel_z(i) = launch_speed_mps*sin(launch_angle_rad);
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %% Update GUI Labels
+  set (h.launch_speed_label, "string", sprintf ("Speed: %.1f +/- %.1f m/s", launch_speed_mps_nom, launch_speed_mps_spread));
+  set (h.launch_angle_label, "string", sprintf ("Angle: %.1f +/- %.1f  deg", launch_angle_deg_nom, launch_angle_spread));
+  set (h.launch_x_dist_label, "string", sprintf ("Dist: %.1f ft", launch_x_ft));
+  set (h.bounce_coef_label, "string", sprintf ("BounceCoef: %.1f", ball_collision_eff));
+
+  
+  % Goal and inner wall points and vectors
+  top_goal_x_close = launch_x_m;
+  top_goal_x_far = top_goal_x_close + goal_top_diameter_m;
+  top_goal_z = goal_top_height_m;
+  bottom_goal_x_close = launch_x_m + (goal_top_diameter_m - goal_bottom_diameter_m)/2;
+  bottom_goal_x_far = bottom_goal_x_close + goal_bottom_diameter_m;
+  bottom_goal_z = goal_bottom_height_m; 
+  vert_top_far = [top_goal_x_far, top_goal_z, 0];
+  vert_top_close = [top_goal_x_close, top_goal_z, 0];
+  vert_bottom_far = [bottom_goal_x_far, bottom_goal_z, 0];
+  vert_bottom_close = [bottom_goal_x_close, bottom_goal_z, 0];
+
+  % Wall unit and normal ectors
+  wall_uv_far = (vert_top_far - vert_bottom_far)/norm(vert_top_far - vert_bottom_far);
+  wall_uv_close = (vert_top_close - vert_bottom_close)/norm(vert_top_close - vert_bottom_close);
+  wall_nv_far = [wall_uv_far(2),-1.0 * wall_uv_far(1), 0]; 
+  wall_nv_close = [wall_uv_close(2),-1.0 * wall_uv_close(1), 0]; 
+    
+
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  % Init Plot
+  cla(h.ax)
+  hold on;
+
+  %draw floor and goal
+  rectangle(h.ax, 'Position', [0,-0.05,launch_x_m,0.05], 'FaceColor', [0,0,0]);
+  rectangle(h.ax, 'Position', [top_goal_x_close,top_goal_z,goal_top_diameter_m,0.05], 'FaceColor', [1,0,0]);
+  rectangle(h.ax, 'Position', [bottom_goal_x_close,bottom_goal_z,goal_bottom_diameter_m,-0.05], 'FaceColor', [1,0,0]);
+  plot(h.ax, [top_goal_x_close, bottom_goal_x_close] , [top_goal_z,bottom_goal_z]);
+  plot(h.ax, [top_goal_x_far, bottom_goal_x_far] , [top_goal_z,bottom_goal_z]);
+
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %% Solution Iteration
+
+  for launch_speed_mps = launch_speeds
+    for launch_angle_deg = launch_angles
+
+      i = 1; %simulation step
+      
+      % Per-iteration constant recalcs
+      launch_angle_rad = pi/180*launch_angle_deg;
 
 
+      %See http://farside.ph.utexas.edu/teaching/336k/Newtonhtml/node29.html for some 
+      %references on trajectory calculation
 
-%calculate trajectory until terminal case (ball hits floor or ball hits goal)
-while( and(pos_z(i) > 0.5*ball_diameter_m,  not(and(pos_z(i) < goal_height_m*0.75 , vel_z < 0, not(pos_x < launch_x_m)))))
-  i = i + 1;
-  time(i) = i*Ts;
-  vel_x(i) = vel_x(i-1)/(1+Ts*g_mps/Vt_mps);
-  vel_z(i) = (-Ts*g_mps + vel_z(i-1))/(1+Ts*g_mps/Vt_mps);
-  pos_x(i) = pos_x(i-1) + vel_x(i)*Ts;
-  pos_z(i) = pos_z(i-1) + vel_z(i)*Ts;
-endwhile
+      %Initial conditions
+      time(i) = i*Ts;
+      pos_x(i) = 0;
+      pos_z(i) = launch_z_m;
+      vel_x(i) = launch_speed_mps*cos(launch_angle_rad);
+      vel_z(i) = launch_speed_mps*sin(launch_angle_rad);
+
+      failed = 0;
+
+      %calculate trajectory until terminal case (ball hits floor or ball hits goal)
+      while(1)
+
+        % Evaluate bounce conditions
+        if(and(pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
+          velVec = [vel_x(i), vel_z(i), 0];
+          posVec = [pos_x(i), pos_z(i), 0];
+          distFar = distPointToLine(posVec, vert_top_far, vert_bottom_far);
+          if(distFar <= ball_rad_m)
+            velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
+            velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
+            velPerpWall *= -1 * ball_collision_eff;
+            vel_x(i) = velAlongWall(1) + velPerpWall(1);
+            vel_z(i) = velAlongWall(2) + velPerpWall(2);
+          endif
+          
+          distClose = distPointToLine(posVec, vert_top_close, vert_bottom_close);
+          if(distClose <= ball_rad_m)
+            velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
+            velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
+            velPerpWall *= -1 * ball_collision_eff;
+            vel_x(i) = velAlongWall(1) + velPerpWall(1);
+            vel_z(i) = velAlongWall(2) + velPerpWall(2);
+          endif
+        endif
+
+        % Step simulation forward
+        i = i + 1;
+        time(i) = i*Ts;
+        vel_x(i) = vel_x(i-1)/(1+Ts*g_mps/Vt_mps);
+        vel_z(i) = (-Ts*g_mps + vel_z(i-1))/(1+Ts*g_mps/Vt_mps);
+        pos_x(i) = pos_x(i-1) + vel_x(i)*Ts;
+        pos_z(i) = pos_z(i-1) + vel_z(i)*Ts;
+        
+        % Check end conditions
+        if(and(pos_z(i) < bottom_goal_z + ball_rad_m, vel_z(i) < 0))
+          if(or(pos_x(i) < bottom_goal_x_close, pos_x(i) > bottom_goal_x_far))
+            failed = 1;
+          else
+            failed = 0;
+          endif
+          break;
+        elseif(and(pos_x(i) > bottom_goal_x_close, pos_z(i) < bottom_goal_z))
+          failed = 1;
+          break;   
+          
+        elseif(and(pos_x(i) > top_goal_x_far + ball_rad_m, pos_z(i) < top_goal_z + ball_rad_m))
+          failed = 1;
+          break; 
+        endif
+        
+      endwhile
+      
 
 
-figure(1);
-clf;
-hold on;
+      %draw ball
+      %rectangle('Position', [pos_x(i)-ball_rad_m,pos_z(i)-ball_rad_m,2*ball_rad_m,2*ball_rad_m], 'FaceColor', [0.5, 0.5, 0.5], 'Curvature', [1, 1]);
 
-%draw floor and goal
-rectangle('Position', [0,-0.05,launch_x_m,0.05]./0.3048, 'FaceColor', [0,0,0]);
-rectangle('Position', [launch_x_m,goal_height_m,goal_diameter_m,0.05]./0.3048, 'FaceColor', [1,0,0]);
+      %Plot trajectory
+      if(failed == 1)
+        color = 'red';
+      else
+        color = 'green';
+      endif
+      plot(h.ax, pos_x, pos_z, "color", color);
+      
+    endfor
+  endfor  
 
-%draw ball
-rectangle('Position', [pos_x(i)-ball_rad_m,pos_z(i)-ball_rad_m,2*ball_rad_m,2*ball_rad_m]./0.3048, 'FaceColor', [0.5, 0.5, 0.5], 'Curvature', [1, 1]);
 
+  axis(h.ax, "equal");
 
-%Plot trajectory
-plot(pos_x./0.3048, pos_z./0.3048);
-axis equal;
+endfunction
 
+h.launch_speed_label = uicontrol ("style", "text",
+                           "units", "normalized",
+                           "string", "",
+                           "horizontalalignment", "left",
+                           "position", [0.00 0.05 0.3 0.07]);
+
+h.launch_speed_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.4,
+                            "position", [0.33 0.05 0.3 0.04]);
+                            
+h.launch_speed_spread_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.0,
+                            "position", [0.66 0.05 0.3 0.04]);   
+   
+h.launch_x_dist_label = uicontrol ("style", "text",
+                           "units", "normalized",
+                           "string", "",
+                           "horizontalalignment", "left",
+                           "position", [0.00 0.15 0.3 0.07]);
+   
+h.launch_x_dist_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.5,
+                            "position", [0.33 0.15 0.3 0.04]);
+                            
+h.launch_x_dist_spread_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.0,
+                            "position", [0.66 0.15 0.3 0.04]); 
+       
+h.launch_angle_label = uicontrol ("style", "text",
+                           "units", "normalized",
+                           "string", "",
+                           "horizontalalignment", "left",
+                           "position", [0.00 0.25 0.3 0.07]);
+       
+h.launch_angle_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.25,
+                            "position", [0.33 0.25 0.3 0.04]);
+                            
+h.launch_angle_spread_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.0,
+                            "position", [0.66 0.25 0.3 0.04]);   
+           
+h.bounce_coef_label = uicontrol ("style", "text",
+                           "units", "normalized",
+                           "string", "",
+                           "horizontalalignment", "left",
+                           "position", [0.00 0.35 0.3 0.07]);
+           
+h.bounce_coef_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.75,
+                            "position", [0.33 0.35 0.3 0.04]);
+                            
+h.bounce_coef_spread_slider = uicontrol ("style", "slider",
+                            "units", "normalized",
+                            "string", "slider",
+                            "callback", @update_plot,
+                            "value", 0.0,
+                            "position", [0.66 0.35 0.3 0.04]);  
+  
+set (gcf, "color", get(0, "defaultuicontrolbackgroundcolor"))
+guidata (gcf, h)
+update_plot (gcf, true);
