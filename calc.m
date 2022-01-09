@@ -165,8 +165,9 @@ function update_plot (obj, init = false)
             if(and(pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
               velVec = [vel_x(i), vel_z(i), 0];
               posVec = [pos_x(i), pos_z(i), 0];
+              
               distFar = distPointToLine(posVec, vert_top_far, vert_bottom_far);
-              if(distFar <= ball_rad_m)
+              if(and(distFar <= ball_rad_m, vel_x(i) > 0))
                 velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
                 velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
                 velPerpWall *= -1 * ball_collision_eff;
@@ -175,7 +176,7 @@ function update_plot (obj, init = false)
               endif
               
               distClose = distPointToLine(posVec, vert_top_close, vert_bottom_close);
-              if(distClose <= ball_rad_m)
+              if(and(distClose <= ball_rad_m, vel_x(i) < 0))
                 velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
                 velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
                 velPerpWall *= -1 * ball_collision_eff;
