@@ -193,23 +193,29 @@ function update_plot (obj, init = false)
             pos_z(i) = pos_z(i-1) + vel_z(i)*Ts;
             
             % Check end conditions
-            if(and(pos_x(i) > bottom_goal_x_close, pos_z(i) < bottom_goal_z))
-              % Too low, hit below the upper HUB
+            if(pos_z(i) < ball_rad_m)
+             % Too low, hit floor
               failed = 1;
               break; 
-            elseif(and(pos_x(i) > top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
-              % Too far, overshot
-              failed = 1;
-              break; 
-            elseif(and(pos_z(i) < bottom_goal_z + ball_rad_m*0.5, vel_z(i) < 0))
-              if(or(pos_x(i) < bottom_goal_x_close, pos_x(i) > bottom_goal_x_far))
-                  % Fell outside target plane inside the upper HUB
+            elseif(pos_x(i) > top_goal_x_close-ball_rad_m)
+              if(and(pos_x(i) > top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
+                % Too far, overshot
                 failed = 1;
-              else
-                  % In the required plane, we're good!
-                failed = 0;
-              endif
-              break;              
+                break; 
+              elseif(and(pos_x(i) < top_goal_x_close, pos_z(i) < top_goal_z + ball_rad_m))
+                % clipped the close lip of the goal, don't count it
+                failed = 1;
+                break; 
+              elseif(and(pos_z(i) < bottom_goal_z + ball_rad_m*0.5, vel_z(i) < 0))
+                if(or(pos_x(i) < bottom_goal_x_close, pos_x(i) > bottom_goal_x_far))
+                    % Fell outside target plane inside the upper HUB
+                  failed = 1;
+                else
+                    % In the required plane, we're good!
+                  failed = 0;
+                endif
+                break;  
+              endif            
             endif 
 
           endwhile
