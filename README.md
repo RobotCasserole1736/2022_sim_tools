@@ -8,3 +8,13 @@ Simulates multiple scenarios for ball trajectories over different ranges of inpu
 
 Tested against [GNU Octave](https://www.gnu.org/software/octave/download)
 
+## Installation
+
+### Linux
+``` sudo apt install octave ``` 
+
+### Mac
+``` brew install octave ``` 
+
+## Running
+``` octave --persist calc.m ``` 
