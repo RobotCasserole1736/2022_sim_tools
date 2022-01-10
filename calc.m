@@ -145,6 +145,7 @@ function update_plot (obj, init = false)
           pos_z = zeros(1, 10);
           vel_x = zeros(1, 10);
           vel_z = zeros(1, 10);
+          bounce = zeros(1,10);
 
           %See http://farside.ph.utexas.edu/teaching/336k/Newtonhtml/node29.html for some 
           %references on trajectory calculation
@@ -155,6 +156,7 @@ function update_plot (obj, init = false)
           pos_z(i) = launch_z_m;
           vel_x(i) = launch_speed_mps*cos(launch_angle_rad);
           vel_z(i) = launch_speed_mps*sin(launch_angle_rad);
+          bounce(1) = 0;
 
           failed = 0;
 
@@ -162,26 +164,32 @@ function update_plot (obj, init = false)
           while(1)
 
             % Evaluate bounce conditions
-            if(and(pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
+            if(and(i > 1, pos_x(i) > top_goal_x_close, pos_x(i) < top_goal_x_far, pos_z(i) < top_goal_z + ball_rad_m))
               velVec = [vel_x(i), vel_z(i), 0];
               posVec = [pos_x(i), pos_z(i), 0];
               
               distFar = distPointToLine(posVec, vert_top_far, vert_bottom_far);
-              if(and(distFar <= ball_rad_m, vel_x(i) > 0))
-                velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
-                velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
-                velPerpWall *= -1 * ball_collision_eff;
-                vel_x(i) = velAlongWall(1) + velPerpWall(1);
-                vel_z(i) = velAlongWall(2) + velPerpWall(2);
+              if(and(distFar <= ball_rad_m, 1))
+                bounce(i) = 1;
+                if(bounce(i-1) == 0)
+                  velAlongWall = wall_uv_far * dot(wall_uv_far, velVec);
+                  velPerpWall  = wall_nv_far * dot(wall_nv_far, velVec);
+                  velPerpWall *= -1 * ball_collision_eff;
+                  vel_x(i) = velAlongWall(1) + velPerpWall(1);
+                  vel_z(i) = velAlongWall(2) + velPerpWall(2);
+                endif  
               endif
               
               distClose = distPointToLine(posVec, vert_top_close, vert_bottom_close);
-              if(and(distClose <= ball_rad_m, vel_x(i) < 0))
-                velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
-                velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
-                velPerpWall *= -1 * ball_collision_eff;
-                vel_x(i) = velAlongWall(1) + velPerpWall(1);
-                vel_z(i) = velAlongWall(2) + velPerpWall(2);
+              if(and(distClose <= ball_rad_m, 1))
+                bounce(i) = 1;
+                if(bounce(i-1) == 0)
+                  velAlongWall = wall_uv_close * dot(wall_uv_close, velVec);
+                  velPerpWall  = wall_nv_close * dot(wall_nv_close, velVec);
+                  velPerpWall *= -1 * ball_collision_eff;
+                  vel_x(i) = velAlongWall(1) + velPerpWall(1);
+                  vel_z(i) = velAlongWall(2) + velPerpWall(2);
+                endif  
               endif
             endif
 
